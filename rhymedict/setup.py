@@ -1,8 +1,6 @@
 import sqlite3, os
 from urllib.request import urlopen
-
-data_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'data'))
-db_path = os.path.join(data_path, 'cmudict.db')
+from rhymedict import get_rhyme_sound
 
 def create_cmudict_tuples():
     cmudict_url = 'http://svn.code.sf.net/p/cmusphinx/code/trunk/cmudict/cmudict-0.7b'
@@ -23,18 +21,6 @@ def create_cmudict_tuples():
         cmudict_tuples.append((word, pronounciation))
       
     return cmudict_tuples
-
-def get_rhyme_sound(pronounciation):
-    pronounciation = pronounciation.split(' ')
-
-    rhyme_sound = 'No rhyme sound'
-    
-    for i in range(len(pronounciation) - 1, -1, -1):
-        if pronounciation[i][-1] in ['1', '2']:
-            rhyme_sound = ' '.join(pronounciation[i:])
-            break
-    
-    return rhyme_sound
 
 def repeated_word(word):
     return word[-3:] in ['(1)', '(2)', '(3)'] 
@@ -78,7 +64,7 @@ def create_db(cmudict_raw):
         pronounciations.append((pron_id, pron, word_id, rhyme_sound_id))
         pron_id += 1
     
-    connection = sqlite3.connect(db_path)
+    connection = sqlite3.connect('./cmudict.db')
     cursor = connection.cursor()
 
     cursor.execute('CREATE TABLE IF NOT EXISTS words (word_id int primary key, word text)')
@@ -101,6 +87,8 @@ def create_db(cmudict_raw):
     connection.commit()
     connection.close()
 
+def main():
+    create_db(create_cmudict_tuples())
+
 if __name__ == '__main__':
-    cmudict_tuples = create_cmudict_tuples()
-    create_db(cmudict_tuples)
+    main()
