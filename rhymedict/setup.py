@@ -1,6 +1,5 @@
 import sqlite3, os
 from urllib.request import urlopen
-from build.build_raw import load_raw
 
 data_path = os.path.abspath(os.path.join(os.path.dirname(__file__), 'data'))
 db_path = os.path.join(data_path, 'cmudict.db')
@@ -18,7 +17,7 @@ def create_raw():
         for line in cmudict_raw:
             file.write(line)
 
-def load_cmudict_tuples():
+def load_cmudict_raw():
     try:
         with open(os.path.join(data_path, 'cmudict_raw.txt'), 'r') as file:
             cmudict_tuples = []
@@ -36,53 +35,95 @@ def load_cmudict_tuples():
         create_raw()
         load_cmudict_tuples()
 
-def create_words_table(cmudict_tuples):
-    words = []
-    w_id = 0
+def get_rhyme_sound(pronounciation):
+    pronounciation = pronounciation.split(' ')
 
-    for w in [t[0] for t in cmudict_tuples]:
-        if w[-3:] not in repeat_suffixes:
-            words.append((w_id, w))
-            w_id += 1
+    rhyme_sound = 'No rhyme sound'
+    
+    for i in range(len(pronounciation) - 1, -1, -1):
+        if pronounciation[i][-1] in ['1', '2']:
+            rhyme_sound = ' '.join(pronounciation[i:])
+            break
+    
+    return rhyme_sound
 
-    conn = sqlite3.connect(db_path)
-    cur = conn.cursor()
+def create_words_table(cursor, words):
+    word_id_tuples = []
+    word_id = 0
 
-    cur.execute('CREATE TABLE IF NOT EXISTS words (word_id int primary key, word text)')
-    cur.executemany('INSERT INTO words VALUES (?,?)', words)
+    for word in words:
+        if word[-3:] not in repeat_suffixes:
+            word_id_tuples.append((word_id, word))
+            word_id += 1
 
-    conn.commit()
-    conn.close()
+    cursor.execute('CREATE TABLE IF NOT EXISTS words (word_id int primary key, word text)')
+    cursor.executemany('INSERT INTO words VALUES (?,?)', word_id_tuples)
 
-def create_pronounciations_table(cmudict_tuples):
-    pronounciations = []
-    p_id = 0
+def create_pronounciations_table(cursor, cmudict_tuples):
+    prounounciation_id_tuples = []
+    pronounciation_id = 0
 
-    conn = sqlite3.connect(db_path)
-    cur = conn.cursor()
-
-    cur.execute('''
+    cursor.execute('''
         CREATE TABLE IF NOT EXISTS pronounciations (pronounciation_id int primary key,
                                                     pronounciation text,
                                                     word_id int)
                                                     
     ''')
 
-    for w,p in cmudict_tuples:
-        if w[-3:] in repeat_suffixes:
-            w = w[:-3]
+    for word,pronounciation in cmudict_tuples:
+        if word[-3:] in repeat_suffixes:
+            word = word[:-3]
         
-        cur.execute('SELECT word_id FROM words WHERE word=?', (w,))
-        w_id = cur.fetchone()[0]
+        cursor.execute('SELECT word_id FROM words WHERE word=?', (word,))
+        word_id = cursor.fetchone()[0]
 
-        pronounciations.append((p_id, p, w_id))
-        p_id += 1
+        prounounciation_id_tuples.append((pronounciation_id, pronounciation, word_id))
+        pronounciation_id += 1
 
-    cur.executemany('INSERT INTO pronounciations VALUES (?,?,?)', pronounciations)
+    cursor.executemany('INSERT INTO pronounciations VALUES (?,?,?)', prounounciation_id_tuples)
 
-    conn.commit()
-    conn.close()
+def create_rhyme_sounds_table(cursor, pronounciations):
+    rhyme_sounds = []
+    rhyme_sound_id = 0
 
-cmudict_tuples = load_cmudict_tuples()
-create_words_table(cmudict_tuples)
-create_pronounciations_table(cmudict_tuples)
+    for pronounciation in pronounciations:
+        rhyme_sound_id_tuple = (rhyme_sound_id, get_rhyme_sound(pronounciation))
+
+        if rhyme_sound_id_tuple not in rhyme_sounds:
+            rhyme_sounds.append(rhyme_sound_id_tuple)
+            rhyme_sound_id += 1
+    
+    cursor.execute('''CREATE TABLE IF NOT EXISTS rhyme_sounds (rhyme_sound_id int primary key,
+                                                                rhyme_sound text)
+    ''')
+    cursor.executemany('INSERT INTO rhyme_sounds VALUES (?,?)', rhyme_sounds)
+
+def create_cmudict(cmudict_raw):
+
+    return 0
+
+def create_db(cmudict):
+
+    connection = sqlite3.connect(db_path)
+    cursor = connection.cursor()
+
+    cursor.execute('CREATE TABLE IF NOT EXISTS words (word_id int primary key, word text)')
+    cursor.execute('''CREATE TABLE IF NOT EXISTS rhyme_sounds (rhyme_sound_id int primary key,
+                                                                rhyme_sound text)
+    ''')
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS pronounciations (pronounciation_id int primary key,
+                                                    pronounciation text,
+                                                    word_id int)
+                                                    
+    ''')
+
+    connection.commit()
+    connection.close()
+
+    return 0
+
+
+if __name__ == '__main__':
+    cmudict_raw = load_cmudict_raw()[:100]
+    create_db(cmudict_raw)
